@@ -1,0 +1,60 @@
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // HELPER: Is the user logged in?
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // HELPER: Get the current user's profile from Firestore
+    function getUserData() {
+      return get(/databases/$(database)/documents/players/$(request.auth.uid)).data;
+    }
+
+    // HELPER: Check if the user has the admin role
+    function isAdmin() {
+      return isSignedIn() && getUserData().role == 'admin';
+    }
+
+    // PLAYER PROFILES
+    match /players/{playerId} {
+      allow read: if isSignedIn();
+      
+      allow create: if isSignedIn() && request.auth.uid == playerId 
+        && request.resource.data.role == 'player'; // Force default role on creation
+      
+      allow update: if isSignedIn() && request.auth.uid == playerId 
+        && request.resource.data.role == resource.data.role; // Prevent self-promotion
+        
+      allow delete: if isAdmin();
+    }
+
+    // MATCHES
+    match /matches/{matchId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      
+      allow update: if isSignedIn() && (
+        isAdmin() || // Admins can manage everything
+        request.auth.uid == resource.data.organizerId || // Proposers can update their own matches
+        (
+          // Non-admins can ONLY join (append themselves to participants)
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participants']) &&
+          request.resource.data.participants.size() == resource.data.participants.size() + 1 &&
+          request.resource.data.participants.last().playerId == request.auth.uid &&
+          !(request.auth.uid in resource.data.participants.map(p => p.playerId))
+        )
+      );
+
+      allow delete: if isSignedIn() && (isAdmin() || request.auth.uid == resource.data.organizerId);
+    }
+
+    // APP SETTINGS (PITCHES)
+    match /settings/{settingId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn(); // Enabled for all users to allow community pitch addition
+    }
+  }
+}

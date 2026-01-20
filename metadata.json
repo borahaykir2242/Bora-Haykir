@@ -1,0 +1,7 @@
+{
+  "name": "HalıSaha Pro - Match Organizer",
+  "description": "A comprehensive soccer match organization and statistics tracking app for large communities, featuring team building, player attributes, and match performance tracking.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
